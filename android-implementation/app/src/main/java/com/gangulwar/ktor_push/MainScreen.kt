@@ -4,7 +4,17 @@ import android.content.Context
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,25 +22,44 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Send
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.*
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.gangulwar.ktor_push.service.NotificationService
 import com.gangulwar.ktor_push.service.ServiceManager
-import kotlinx.coroutines.flow.collectLatest
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(serviceContext: Context) {
     val notificationService = remember { NotificationService() }
-    val isRunning by ServiceManager.isServiceRunning.collectAsState()
+    val serviceState by ServiceManager.serviceState.collectAsState()
     var message by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -42,8 +71,42 @@ fun MainScreen(serviceContext: Context) {
     val backgroundColor = Color(0xFFF5F5F5)
     val surfaceColor = Color(0xFFFFFFFF)
     val errorColor = Color(0xFFE53935)
+    val warningColor = Color(0xFFFFA000)
     val textPrimaryColor = Color(0xFF212121)
     val textSecondaryColor = Color(0xFF757575)
+
+    val (statusColor, statusText, statusDescription, statusIcon) = when (serviceState) {
+        is ServiceManager.ServiceState.Running -> Quadruple(
+            accentColor,
+            "ACTIVE",
+            "Your notifications are being monitored",
+            Icons.Rounded.Notifications
+        )
+
+        is ServiceManager.ServiceState.Connecting -> Quadruple(
+            warningColor,
+            "CONNECTING",
+            "Attempt ${(serviceState as ServiceManager.ServiceState.Connecting).attempt}...",
+            Icons.Rounded.Refresh
+        )
+
+        is ServiceManager.ServiceState.Error -> {
+            val errorState = serviceState as ServiceManager.ServiceState.Error
+            Quadruple(
+                errorColor,
+                "ERROR",
+                "${errorState.message}. Reconnecting in ${errorState.reconnectIn}s",
+                Icons.Rounded.Warning
+            )
+        }
+
+        else -> Quadruple(
+            errorColor,
+            "INACTIVE",
+            "Start the service to enable notifications",
+            Icons.Rounded.Close
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -53,7 +116,7 @@ fun MainScreen(serviceContext: Context) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Row(
@@ -70,21 +133,24 @@ fun MainScreen(serviceContext: Context) {
                     color = textPrimaryColor
                 )
 
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = if (isRunning) accentColor else errorColor,
-                            shape = RoundedCornerShape(16.dp)
+                AssistChip(
+                    onClick = {
+
+                    },
+                    label = {
+                        Text(
+                            text = statusText,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = if (isRunning) "ACTIVE" else "INACTIVE",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = statusColor
+                    ),
+                    border = null
+                )
+
             }
 
             Card(
@@ -103,15 +169,15 @@ fun MainScreen(serviceContext: Context) {
                         modifier = Modifier
                             .size(80.dp)
                             .background(
-                                color = if (isRunning) accentColor.copy(alpha = 0.2f) else errorColor.copy(alpha = 0.2f),
+                                color = statusColor.copy(alpha = 0.2f),
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isRunning) Icons.Rounded.Notifications else Icons.Rounded.Close,
+                            imageVector = statusIcon,
                             contentDescription = "Status",
-                            tint = if (isRunning) accentColor else errorColor,
+                            tint = statusColor,
                             modifier = Modifier.size(40.dp)
                         )
                     }
@@ -119,14 +185,19 @@ fun MainScreen(serviceContext: Context) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = if (isRunning) "Service Running" else "Service Stopped",
+                        text = when (serviceState) {
+                            is ServiceManager.ServiceState.Running -> "Service Running"
+                            is ServiceManager.ServiceState.Connecting -> "Connecting to Service"
+                            is ServiceManager.ServiceState.Error -> "Service Error"
+                            else -> "Service Stopped"
+                        },
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Medium,
                         color = textPrimaryColor
                     )
 
                     Text(
-                        text = if (isRunning) "Your notifications are being monitored" else "Start the service to enable notifications",
+                        text = statusDescription,
                         fontSize = 14.sp,
                         color = textSecondaryColor,
                         textAlign = TextAlign.Center,
@@ -157,7 +228,12 @@ fun MainScreen(serviceContext: Context) {
                     OutlinedTextField(
                         value = message,
                         onValueChange = { message = it },
-                        placeholder = { Text("Type your message here...", color = textSecondaryColor) },
+                        placeholder = {
+                            Text(
+                                "Type your message here...",
+                                color = textSecondaryColor
+                            )
+                        },
                         maxLines = 3,
                         modifier = Modifier.fillMaxWidth(),
                         colors = TextFieldDefaults.outlinedTextFieldColors(
@@ -177,7 +253,7 @@ fun MainScreen(serviceContext: Context) {
                             .height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = isRunning && message.isNotEmpty()
+                        enabled = serviceState is ServiceManager.ServiceState.Running && message.isNotEmpty()
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -230,7 +306,7 @@ fun MainScreen(serviceContext: Context) {
                                 .height(56.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                             shape = RoundedCornerShape(12.dp),
-                            enabled = !isRunning
+                            enabled = serviceState is ServiceManager.ServiceState.Stopped
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -258,7 +334,7 @@ fun MainScreen(serviceContext: Context) {
                                 .height(56.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = errorColor),
                             shape = RoundedCornerShape(12.dp),
-                            enabled = isRunning
+                            enabled = serviceState !is ServiceManager.ServiceState.Stopped
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -284,3 +360,5 @@ fun MainScreen(serviceContext: Context) {
         }
     }
 }
+
+data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

@@ -8,30 +8,48 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 object ServiceManager {
-    val _isServiceRunning = MutableStateFlow(false)
-    val isServiceRunning = _isServiceRunning.asStateFlow()
+    sealed class ServiceState {
+        object Stopped : ServiceState()
+        object Running : ServiceState()
+        data class Connecting(val attempt: Int) : ServiceState()
+        data class Error(val message: String, val reconnectIn: Int) : ServiceState()
+    }
+
+    private val _serviceState = MutableStateFlow<ServiceState>(ServiceState.Stopped)
+    val serviceState = _serviceState.asStateFlow()
+
+    val isServiceRunning: Boolean
+        get() = _serviceState.value !is ServiceState.Stopped
+
+    fun updateState(state: ServiceState) {
+        _serviceState.value = state
+    }
 
     fun startService(context: Context) {
-        if (!_isServiceRunning.value) {
+        if (_serviceState.value is ServiceState.Stopped) {
+            updateState(ServiceState.Connecting(1))
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(Intent(context, NotificationService::class.java))
             } else {
                 context.startService(Intent(context, NotificationService::class.java))
             }
-            _isServiceRunning.value = true
         }
     }
 
     fun stopService(context: Context) {
-        if (_isServiceRunning.value) {
+        if (_serviceState.value !is ServiceState.Stopped) {
             context.stopService(Intent(context, NotificationService::class.java))
-            _isServiceRunning.value = false
+            updateState(ServiceState.Stopped)
         }
     }
 
     fun updateServiceStatus(context: Context) {
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        _isServiceRunning.value = manager.getRunningServices(Integer.MAX_VALUE)
+        val isRunning = manager.getRunningServices(Integer.MAX_VALUE)
             .any { it.service.className == NotificationService::class.java.name }
+
+        if (!isRunning && _serviceState.value !is ServiceState.Stopped) {
+            updateState(ServiceState.Stopped)
+        }
     }
 }
