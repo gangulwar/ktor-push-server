@@ -60,10 +60,16 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
 
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.cio)
-    implementation(libs.ktor.client.websockets)
-    implementation(libs.ktor.client.logging)
+//    implementation(libs.ktor.client.core)
+//    implementation(libs.ktor.client.cio)
+//    implementation(libs.ktor.client.websockets)
+//    implementation(libs.ktor.client.logging)
+//    implementation(libs.ktor.client.android)
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation("io.ktor:ktor-client-cio:2.3.5")
+    implementation("io.ktor:ktor-client-okhttp:2.3.5")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
