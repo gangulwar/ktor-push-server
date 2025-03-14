@@ -1,5 +1,6 @@
 package com.gangulwar
 
+import com.gangulwar.application.NotificationManager
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
@@ -17,17 +18,25 @@ fun Application.configureSockets() {
         maxFrameSize = Long.MAX_VALUE
         masking = false
     }
+
     routing {
-        webSocket("/ws") { // websocketSession
-            for (frame in incoming) {
-                if (frame is Frame.Text) {
-                    val text = frame.readText()
-                    outgoing.send(Frame.Text("YOU SAID: $text"))
-                    if (text.equals("bye", ignoreCase = true)) {
-                        close(CloseReason(CloseReason.Codes.NORMAL, "Client said BYE"))
+        webSocket("/connect/{deviceId}") {
+            val deviceId = call.parameters["deviceId"] ?: return@webSocket close()
+            NotificationManager.addSession(deviceId, this)
+
+            try {
+                for (frame in incoming) {
+                    if (frame is Frame.Text) {
+                        val receivedMessage = frame.readText()
+                        println("Received from $deviceId: $receivedMessage")
                     }
                 }
+            } catch (e: Exception) {
+                println("Connection lost for $deviceId")
+            } finally {
+                NotificationManager.removeSession(deviceId)
             }
         }
     }
+
 }
